@@ -1,10 +1,24 @@
 from flask import Flask, render_template, request, jsonify
 import requests
-import os
 from collections import Counter
+import json
+import os
 
 app = Flask(__name__)
 app.config['TEMPLATES_AUTO_RELOAD'] = True
+
+# Arquivo para armazenar o cache dos resultados
+CACHE_FILE = 'resultados_cache.json'
+
+def load_cache():
+    if os.path.exists(CACHE_FILE):
+        with open(CACHE_FILE, 'r') as f:
+            return json.load(f)
+    return {'numeros': [], 'timestamp': 0}
+
+def save_cache(data):
+    with open(CACHE_FILE, 'w') as f:
+        json.dump(data, f)
 
 def check_result(numbers, contest=None):
     # Nova URL da API da Caixa
@@ -93,7 +107,7 @@ def check():
             if len(set(numbers)) != 6:
                 return jsonify({'success': False, 'error': 'Não pode haver números repetidos'})
         except ValueError:
-            return jsonify({'success': False, 'error': 'Por favor, insira apenas números v��lidos'})
+            return jsonify({'success': False, 'error': 'Por favor, insira apenas números válidos'})
         
         result = check_result(numbers, contest)
         return jsonify(result)
@@ -104,56 +118,86 @@ def check():
 @app.route('/ranking')
 def get_ranking():
     try:
-        # Headers para simular um navegador
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'application/json',
-            'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7'
-        }
-
-        # Nova URL da API
-        url = "https://loteriascaixa-api.herokuapp.com/api/mega-sena/latest"
+        # Usar API alternativa
+        url = "https://loteriascaixa-api.herokuapp.com/api/mega-sena"
+        response = requests.get(url, timeout=10)
         
-        response = requests.get(url, headers=headers, timeout=10)
-        
+        all_numbers = []
         if response.status_code == 200:
-            data = response.json()
-            all_numbers = []
+            concursos = response.json()
+            for concurso in concursos:
+                dezenas = concurso.get('dezenas', [])
+                for dezena in dezenas:
+                    all_numbers.append(int(dezena))
             
-            # Coletar números dos últimos sorteios
-            dezenas = data.get('dezenas', [])
-            for dezena in dezenas:
-                all_numbers.append(int(dezena))
-            
-            # Criar ranking
-            number_count = Counter(all_numbers)
-            ranking = []
-            
-            # Criar ranking completo (1 a 60)
-            for num in range(1, 61):
-                freq = number_count.get(num, 0)
-                ranking.append({
-                    "numero": num,
-                    "frequencia": freq,
-                    "porcentagem": round((freq / len(all_numbers) * 100) if freq > 0 else 0, 2)
-                })
-            
-            # Ordenar por frequência
-            ranking.sort(key=lambda x: x['frequencia'], reverse=True)
-            
+            # Salvar no cache
+            save_cache({'numeros': all_numbers})
+        else:
+            # Usar cache se a API falhar
+            cache = load_cache()
+            all_numbers = cache.get('numeros', [])
+        
+        if not all_numbers:
             return jsonify({
-                'success': True,
-                'ranking': ranking,
-                'total_jogos': len(dezenas) // 6
+                'success': False,
+                'error': 'Não foi possível obter os números'
             })
         
+        # Calcular frequências
+        number_count = Counter(all_numbers)
+        ranking = []
+        
+        # Criar ranking completo (1 a 60)
+        total_jogos = len(all_numbers) / 6
+        for num in range(1, 61):
+            freq = number_count.get(num, 0)
+            ranking.append({
+                "numero": num,
+                "frequencia": freq,
+                "porcentagem": round((freq / total_jogos) * 100, 2)
+            })
+        
+        # Ordenar por frequência
+        ranking.sort(key=lambda x: x['frequencia'], reverse=True)
+        
         return jsonify({
-            'success': False, 
-            'error': 'Não foi possível obter os resultados'
+            'success': True,
+            'ranking': ranking,
+            'total_jogos': int(total_jogos)
         })
+        
     except Exception as e:
+        print(f"Erro no ranking: {str(e)}")  # Debug
+        # Tentar usar cache em caso de erro
+        try:
+            cache = load_cache()
+            all_numbers = cache.get('numeros', [])
+            if all_numbers:
+                number_count = Counter(all_numbers)
+                ranking = []
+                total_jogos = len(all_numbers) / 6
+                
+                for num in range(1, 61):
+                    freq = number_count.get(num, 0)
+                    ranking.append({
+                        "numero": num,
+                        "frequencia": freq,
+                        "porcentagem": round((freq / total_jogos) * 100, 2)
+                    })
+                
+                ranking.sort(key=lambda x: x['frequencia'], reverse=True)
+                
+                return jsonify({
+                    'success': True,
+                    'ranking': ranking,
+                    'total_jogos': int(total_jogos),
+                    'from_cache': True
+                })
+        except Exception as cache_error:
+            print(f"Erro ao usar cache: {str(cache_error)}")  # Debug
+            
         return jsonify({
-            'success': False, 
+            'success': False,
             'error': f'Erro ao processar ranking: {str(e)}'
         })
 
