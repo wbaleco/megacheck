@@ -93,7 +93,7 @@ def check():
             if len(set(numbers)) != 6:
                 return jsonify({'success': False, 'error': 'Não pode haver números repetidos'})
         except ValueError:
-            return jsonify({'success': False, 'error': 'Por favor, insira apenas números válidos'})
+            return jsonify({'success': False, 'error': 'Por favor, insira apenas números v��lidos'})
         
         result = check_result(numbers, contest)
         return jsonify(result)
@@ -104,40 +104,58 @@ def check():
 @app.route('/ranking')
 def get_ranking():
     try:
-        # Buscar últimos 100 resultados
-        url = "https://servicebus2.caixa.gov.br/portaldeloterias/api/megasena/latest"
-        response = requests.get(url)
+        # Headers para simular um navegador
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'application/json',
+            'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7'
+        }
+
+        # Nova URL da API
+        url = "https://loteriascaixa-api.herokuapp.com/api/mega-sena/latest"
+        
+        response = requests.get(url, headers=headers, timeout=10)
         
         if response.status_code == 200:
             data = response.json()
             all_numbers = []
             
-            # Coletar todos os números sorteados
-            for dezena in data.get('dezenas', []):
+            # Coletar números dos últimos sorteios
+            dezenas = data.get('dezenas', [])
+            for dezena in dezenas:
                 all_numbers.append(int(dezena))
             
-            # Contar frequência dos números
-            number_count = Counter(all_numbers)
-            
             # Criar ranking
-            ranking = [
-                {
+            number_count = Counter(all_numbers)
+            ranking = []
+            
+            # Criar ranking completo (1 a 60)
+            for num in range(1, 61):
+                freq = number_count.get(num, 0)
+                ranking.append({
                     "numero": num,
                     "frequencia": freq,
-                    "porcentagem": round((freq / len(all_numbers)) * 100, 2)
-                }
-                for num, freq in number_count.most_common()
-            ]
+                    "porcentagem": round((freq / len(all_numbers) * 100) if freq > 0 else 0, 2)
+                })
+            
+            # Ordenar por frequência
+            ranking.sort(key=lambda x: x['frequencia'], reverse=True)
             
             return jsonify({
                 'success': True,
                 'ranking': ranking,
-                'total_jogos': len(all_numbers) // 6
+                'total_jogos': len(dezenas) // 6
             })
-            
-        return jsonify({'success': False, 'error': 'Não foi possível obter os resultados'})
+        
+        return jsonify({
+            'success': False, 
+            'error': 'Não foi possível obter os resultados'
+        })
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
+        return jsonify({
+            'success': False, 
+            'error': f'Erro ao processar ranking: {str(e)}'
+        })
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
