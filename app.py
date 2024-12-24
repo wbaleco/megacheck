@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, jsonify
 import requests
+import os
 
 app = Flask(__name__)
 
@@ -99,5 +100,8 @@ def check():
         return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
-    print("Iniciando o servidor Flask...")  # Log para debug
-    app.run(port=8080, debug=True)
+    # Desenvolvimento
+    app.run(debug=True)
+else:
+    # Produção
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
