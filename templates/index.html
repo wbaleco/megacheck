@@ -57,6 +57,25 @@
                 grid-template-columns: repeat(6, 1fr) !important;
             }
         }
+
+        .number-ball {
+            width: 50px;
+            height: 50px;
+            line-height: 50px;
+            border-radius: 50%;
+            background: #28a745;
+            color: white;
+            margin: 0 auto;
+            font-weight: bold;
+        }
+
+        .card {
+            transition: transform 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
     </style>
 </head>
 <body class="bg-light">
@@ -115,6 +134,21 @@
                             <h4><i class="bi bi-clock-history"></i> Histórico de Verificações</h4>
                             <div id="history" class="list-group">
                                 <!-- Será preenchido via JavaScript -->
+                            </div>
+                        </div>
+
+                        <div class="mt-4">
+                            <div class="card">
+                                <div class="card-header bg-primary text-white">
+                                    <h4 class="mb-0">
+                                        <i class="bi bi-graph-up"></i> Ranking dos Números Mais Sorteados
+                                    </h4>
+                                </div>
+                                <div class="card-body">
+                                    <div id="rankingContent" class="row">
+                                        <!-- Será preenchido via JavaScript -->
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -301,6 +335,59 @@
                 submitBtn.disabled = false;
             });
         };
+
+        // Função para carregar o ranking
+        function loadRanking() {
+            fetch('/ranking')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const rankingHtml = data.ranking.map((item, index) => `
+                            <div class="col-md-3 col-sm-6 mb-3">
+                                <div class="card ${getCardClass(index)}">
+                                    <div class="card-body text-center">
+                                        <h3 class="number-ball mb-2">${item.numero}</h3>
+                                        <h5 class="mb-1">Frequência: ${item.frequencia}</h5>
+                                        <small class="text-muted">${item.porcentagem}% dos jogos</small>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('');
+
+                        document.getElementById('rankingContent').innerHTML = `
+                            <div class="col-12 mb-3 text-center">
+                                <h5>Baseado nos últimos ${data.total_jogos} jogos</h5>
+                            </div>
+                            ${rankingHtml}
+                        `;
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('rankingContent').innerHTML = `
+                        <div class="col-12">
+                            <div class="alert alert-danger">
+                                Erro ao carregar o ranking
+                            </div>
+                        </div>
+                    `;
+                });
+        }
+
+        // Função para definir a classe do card baseado na posição
+        function getCardClass(index) {
+            switch(index) {
+                case 0: return 'border-success';
+                case 1: return 'border-primary';
+                case 2: return 'border-info';
+                default: return 'border-light';
+            }
+        }
+
+        // Carregar ranking quando a página carregar
+        document.addEventListener('DOMContentLoaded', loadRanking);
+
+        // Atualizar ranking a cada 5 minutos
+        setInterval(loadRanking, 300000);
     </script>
 </body>
 </html>

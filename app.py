@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, jsonify
 import requests
 import os
+from collections import Counter
 
 app = Flask(__name__)
 app.config['TEMPLATES_AUTO_RELOAD'] = True
@@ -98,6 +99,44 @@ def check():
         return jsonify(result)
     except Exception as e:
         print(f"Erro no /check: {e}")  # Log para debug
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/ranking')
+def get_ranking():
+    try:
+        # Buscar últimos 100 resultados
+        url = "https://servicebus2.caixa.gov.br/portaldeloterias/api/megasena/latest"
+        response = requests.get(url)
+        
+        if response.status_code == 200:
+            data = response.json()
+            all_numbers = []
+            
+            # Coletar todos os números sorteados
+            for dezena in data.get('dezenas', []):
+                all_numbers.append(int(dezena))
+            
+            # Contar frequência dos números
+            number_count = Counter(all_numbers)
+            
+            # Criar ranking
+            ranking = [
+                {
+                    "numero": num,
+                    "frequencia": freq,
+                    "porcentagem": round((freq / len(all_numbers)) * 100, 2)
+                }
+                for num, freq in number_count.most_common()
+            ]
+            
+            return jsonify({
+                'success': True,
+                'ranking': ranking,
+                'total_jogos': len(all_numbers) // 6
+            })
+            
+        return jsonify({'success': False, 'error': 'Não foi possível obter os resultados'})
+    except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
