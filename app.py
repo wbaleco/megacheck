@@ -3,6 +3,7 @@ import requests
 import os
 
 app = Flask(__name__)
+app.config['TEMPLATES_AUTO_RELOAD'] = True
 
 def check_result(numbers, contest=None):
     # Nova URL da API da Caixa
@@ -100,9 +101,8 @@ def check():
         return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
-    # Desenvolvimento
-    app.run(debug=True)
-else:
-    # Produção
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port)
+    port = int(os.environ.get("PORT", 10000))
+    if os.environ.get('FLASK_ENV') == 'development':
+        app.run(debug=True)
+    else:
+        app.run(host='0.0.0.0', port=port)
